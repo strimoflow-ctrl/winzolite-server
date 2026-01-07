@@ -1,15 +1,16 @@
 import os
 import telebot
+from flask import Flask
+from threading import Thread
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-# Load Env
+# 1. Load Environment Variables
 load_dotenv()
 
-# Variables
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 APP_URL = os.getenv('APP_URL')
-ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID') # Channel ID fetch kiya
+ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 
 if not BOT_TOKEN:
     print("❌ Error: BOT_TOKEN missing")
@@ -17,16 +18,28 @@ if not BOT_TOKEN:
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# --- FLASK SERVER SETUP (For Render & UptimeRobot) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Bot is Running! UptimeRobot check passed."
+
+def run_web_server():
+    # Render PORT environment variable automatically set karta hai
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+
+# --- TELEGRAM BOT LOGIC ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     try:
-        # 1. User Data Nikalo
         user = message.from_user
         first_name = user.first_name
         user_id = user.id
         username = f"@{user.username}" if user.username else "No Username"
         
-        # 2. Admin Channel pe Log Bhejo (Silent Notification)
+        # 1. Admin Channel Notification
         if ADMIN_CHANNEL_ID:
             log_text = (
                 f"🚀 **New User Started Bot!**\n\n"
@@ -39,7 +52,7 @@ def send_welcome(message):
             except Exception as e:
                 print(f"⚠️ Channel Log Error: {e}")
 
-        # 3. User ko Welcome Message Bhejo
+        # 2. Welcome Message
         text = (
             f"Hello {first_name}! 👋\n\n"
             f"🚀 **Welcome to WinzoLite!**\n\n"
@@ -57,5 +70,18 @@ def send_welcome(message):
     except Exception as e:
         print(f"❌ Error: {e}")
 
-print("🤖 Bot is running...")
-bot.infinity_polling()
+# --- MAIN EXECUTION ---
+def keep_alive():
+    t = Thread(target=run_web_server)
+    t.start()
+
+if __name__ == "__main__":
+    # Pehle Web Server start karo (Background thread me)
+    keep_alive()
+    
+    # Fir Bot start karo (Main thread me)
+    print("🤖 Bot is polling...")
+    try:
+        bot.infinity_polling()
+    except Exception as e:
+        print(f"❌ Polling Error: {e}")
